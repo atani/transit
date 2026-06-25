@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -175,9 +176,13 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var body map[string]any
-		_ = json.NewDecoder(resp.Body).Decode(&body)
-		return fmt.Errorf("transit api %s: %v", resp.Status, body)
+		// The error body may be JSON or a plain-text/HTML page; read it raw
+		// with a size cap so a huge response can't exhaust memory.
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		if msg := strings.TrimSpace(string(raw)); msg != "" {
+			return fmt.Errorf("transit api %s: %s", resp.Status, msg)
+		}
+		return fmt.Errorf("transit api %s", resp.Status)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

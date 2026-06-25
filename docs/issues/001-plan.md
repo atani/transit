@@ -21,7 +21,7 @@ Build `transit` as a Go command-line tool for Japan transit routes using `https:
 - [x] Format service seconds as `HH:MM`, including `(+1d)` / `(-1d)`
 - [x] Add `--json` for scripting/agent use
 - [x] Add basic unit test for time formatting
-- [ ] Add GitHub Actions for `go test ./...` and `go build ./cmd/transit`
+- [x] Add GitHub Actions for `go test ./...` and `go build ./cmd/transit`
 - [ ] Improve route formatting, especially fare/platform/transfer display
 
 ### M2: Robust CLI

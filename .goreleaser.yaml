@@ -1,0 +1,101 @@
+# GoReleaser configuration for transit.
+# Docs: https://goreleaser.com
+version: 2
+
+project_name: transit
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: transit
+    main: ./cmd/transit
+    binary: transit
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: transit
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+
+# release-please creates the GitHub release and tag; GoReleaser only attaches
+# the build artifacts to it.
+release:
+  mode: keep-existing
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Publish a Homebrew cask to atani/homebrew-tap so users can run
+# `brew install atani/tap/transit`.
+homebrew_casks:
+  - name: transit
+    binaries:
+      - transit
+    repository:
+      owner: atani
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: "https://github.com/atani/transit"
+    description: "Japan transit routes and station departures CLI"
+    commit_author:
+      name: atani
+      email: a.taniwaki@gmail.com
+    # Remove the macOS quarantine attribute so the unsigned binary runs.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/transit"]
+          end
+
+# Publish a winget manifest as a pull request to microsoft/winget-pkgs
+# from the atani/winget-pkgs fork, so users can run `winget install atani.transit`.
+winget:
+  - name: transit
+    publisher: atani
+    publisher_url: https://github.com/atani
+    package_identifier: atani.transit
+    short_description: "Japan transit routes and station departures CLI"
+    license: "MIT"
+    homepage: "https://github.com/atani/transit"
+    commit_author:
+      name: atani
+      email: a.taniwaki@gmail.com
+    repository:
+      owner: atani
+      name: winget-pkgs
+      branch: "transit-{{ .Version }}"
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
