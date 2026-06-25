@@ -22,6 +22,18 @@ jobs:
         with:
           go-version: "1.22"
       - run: go build ./...
+      - run: go test ./...
+
+  # The race detector needs a C toolchain; run it on Linux where it is most
+  # reliable. (Go 1.22 race binaries trip a dyld LC_UUID error on recent macOS.)
+  race:
+    name: Race
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.22"
       - run: go test ./... -race
 
   lint:
