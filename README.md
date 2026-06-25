@@ -6,7 +6,21 @@
 
 Initial scaffold. The first milestone focuses on a fast human CLI; the MCP server will reuse the same core client and formatter.
 
-## Install from source
+## Install
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install atani/tap/transit
+```
+
+### winget (Windows)
+
+```powershell
+winget install atani.transit
+```
+
+### From source
 
 ```bash
 go install github.com/atani/transit/cmd/transit@latest

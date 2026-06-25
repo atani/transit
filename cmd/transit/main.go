@@ -11,6 +11,9 @@ import (
 	"github.com/atani/transit/internal/transit"
 )
 
+// version is overridden at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -29,7 +32,7 @@ func run(ctx context.Context, args []string) error {
 		fs := flag.NewFlagSet("suggest", flag.ExitOnError)
 		limit := fs.Int("limit", 10, "maximum stations to show")
 		jsonOut := fs.Bool("json", false, "print raw JSON")
-		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"--json": true}))
+		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"json": true}))
 		if fs.NArg() != 1 {
 			return fmt.Errorf("usage: transit suggest <query>")
 		}
@@ -50,7 +53,7 @@ func run(ctx context.Context, args []string) error {
 		typeValue := fs.String("type", "departure", "departure|arrival|first|last")
 		n := fs.Int("num", 3, "number of itineraries")
 		jsonOut := fs.Bool("json", false, "print raw JSON")
-		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"--json": true}))
+		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"json": true}))
 		if fs.NArg() != 2 {
 			return fmt.Errorf("usage: transit plan <from> <to>")
 		}
@@ -76,7 +79,7 @@ func run(ctx context.Context, args []string) error {
 		timeValue := fs.String("time", "", "HH:MM or HH:MM:SS")
 		limit := fs.Int("limit", 20, "maximum departures")
 		jsonOut := fs.Bool("json", false, "print raw JSON")
-		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"--json": true}))
+		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"json": true}))
 		if fs.NArg() != 1 {
 			return fmt.Errorf("usage: transit departures <station>")
 		}
@@ -100,6 +103,8 @@ func run(ctx context.Context, args []string) error {
 		}
 	case "mcp":
 		return fmt.Errorf("MCP server is planned; see GitHub issues for design")
+	case "version", "-v", "--version":
+		fmt.Println("transit", version)
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -136,7 +141,7 @@ func reorderFlags(args []string, boolFlags map[string]bool) []string {
 		arg := args[i]
 		if strings.HasPrefix(arg, "-") {
 			flags = append(flags, arg)
-			name := arg
+			name := strings.TrimLeft(arg, "-")
 			if idx := strings.IndexByte(name, '='); idx >= 0 {
 				name = name[:idx]
 			}
@@ -158,5 +163,6 @@ Usage:
   transit suggest <query> [--limit N] [--json]
   transit plan <from> <to> [--date YYYYMMDD] [--time HH:MM] [--type departure|arrival|first|last] [--json]
   transit departures <station> [--date YYYYMMDD] [--time HH:MM] [--limit N] [--json]
-  transit mcp`)
+  transit mcp
+  transit version`)
 }
