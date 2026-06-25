@@ -36,6 +36,11 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# release-please creates the GitHub release and tag; GoReleaser only attaches
+# the build artifacts to it.
+release:
+  mode: keep-existing
+
 changelog:
   sort: asc
   filters:
