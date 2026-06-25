@@ -44,7 +44,7 @@ func run(ctx context.Context, args []string) error {
 			return printJSON(res)
 		}
 		for _, st := range res.Stations {
-			fmt.Printf("%s	%s	%s	%s\n", st.Name, st.NameKana, st.ID, st.FeedName)
+			fmt.Printf("%s	%s	%s\n", st.Name, st.NameKana, st.FeedName)
 		}
 	case "plan":
 		fs := flag.NewFlagSet("plan", flag.ExitOnError)
@@ -99,7 +99,7 @@ func run(ctx context.Context, args []string) error {
 			if headsign != "" {
 				headsign = " -> " + headsign
 			}
-			fmt.Printf("%s	%s	%s%s\n", transit.FormatServiceSeconds(d.DepartureSecs), d.Mode, d.RouteName, headsign)
+			fmt.Printf("%s	%s	%s%s\n", transit.FormatServiceSeconds(d.DepartureSecs), transit.ModeLabel(d.Mode), d.RouteName, headsign)
 		}
 	case "mcp":
 		return fmt.Errorf("MCP server is planned; see GitHub issues for design")
