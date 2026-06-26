@@ -16,7 +16,7 @@ var version = "dev"
 
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, "エラー:", err)
 		os.Exit(1)
 	}
 }
@@ -30,11 +30,11 @@ func run(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "suggest":
 		fs := flag.NewFlagSet("suggest", flag.ExitOnError)
-		limit := fs.Int("limit", 10, "maximum stations to show")
-		jsonOut := fs.Bool("json", false, "print raw JSON")
+		limit := fs.Int("limit", 10, "表示する駅の最大数")
+		jsonOut := fs.Bool("json", false, "生の JSON を出力")
 		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"json": true}))
 		if fs.NArg() != 1 {
-			return fmt.Errorf("usage: transit suggest <query>")
+			return fmt.Errorf("使い方: transit suggest <駅名>")
 		}
 		res, err := client.Suggest(ctx, fs.Arg(0), *limit)
 		if err != nil {
@@ -48,14 +48,14 @@ func run(ctx context.Context, args []string) error {
 		}
 	case "plan":
 		fs := flag.NewFlagSet("plan", flag.ExitOnError)
-		date := fs.String("date", "", "service date YYYYMMDD")
-		timeValue := fs.String("time", "", "HH:MM or HH:MM:SS")
-		typeValue := fs.String("type", "departure", "departure|arrival|first|last")
-		n := fs.Int("num", 3, "number of itineraries")
-		jsonOut := fs.Bool("json", false, "print raw JSON")
+		date := fs.String("date", "", "対象日 YYYYMMDD")
+		timeValue := fs.String("time", "", "HH:MM または HH:MM:SS")
+		typeValue := fs.String("type", "departure", "departure|arrival|first|last（出発/到着/始発/終電）")
+		n := fs.Int("num", 3, "経路候補の数")
+		jsonOut := fs.Bool("json", false, "生の JSON を出力")
 		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"json": true}))
 		if fs.NArg() != 2 {
-			return fmt.Errorf("usage: transit plan <from> <to>")
+			return fmt.Errorf("使い方: transit plan <出発> <到着>")
 		}
 		from, to, err := client.ResolveStationPair(ctx, fs.Arg(0), fs.Arg(1))
 		if err != nil {
@@ -74,13 +74,13 @@ func run(ctx context.Context, args []string) error {
 		}
 	case "departures":
 		fs := flag.NewFlagSet("departures", flag.ExitOnError)
-		date := fs.String("date", "", "service date YYYYMMDD")
-		timeValue := fs.String("time", "", "HH:MM or HH:MM:SS")
-		limit := fs.Int("limit", 20, "maximum departures")
-		jsonOut := fs.Bool("json", false, "print raw JSON")
+		date := fs.String("date", "", "対象日 YYYYMMDD")
+		timeValue := fs.String("time", "", "HH:MM または HH:MM:SS")
+		limit := fs.Int("limit", 20, "発車案内の最大件数")
+		jsonOut := fs.Bool("json", false, "生の JSON を出力")
 		_ = fs.Parse(reorderFlags(args[1:], map[string]bool{"json": true}))
 		if fs.NArg() != 1 {
-			return fmt.Errorf("usage: transit departures <station>")
+			return fmt.Errorf("使い方: transit departures <駅名>")
 		}
 		stationID, _, err := client.ResolveStation(ctx, fs.Arg(0))
 		if err != nil {
@@ -101,13 +101,13 @@ func run(ctx context.Context, args []string) error {
 			fmt.Printf("%s	%s	%s%s\n", transit.FormatServiceSeconds(d.DepartureSecs), transit.ModeLabel(d.Mode), d.RouteName, headsign)
 		}
 	case "mcp":
-		return fmt.Errorf("MCP server is planned; see GitHub issues for design")
+		return fmt.Errorf("MCP サーバーは計画中です。設計は GitHub の issue を参照してください")
 	case "version", "-v", "--version":
 		fmt.Println("transit", version)
 	case "help", "-h", "--help":
 		usage()
 	default:
-		return fmt.Errorf("unknown command: %s", args[0])
+		return fmt.Errorf("不明なコマンド: %s", args[0])
 	}
 	return nil
 }
@@ -173,12 +173,12 @@ func reorderFlags(args []string, boolFlags map[string]bool) []string {
 }
 
 func usage() {
-	fmt.Println(`transit - Japan transit CLI powered by api.transit.ls8h.com
+	fmt.Println(`transit - 日本の経路検索・発車案内 CLI（api.transit.ls8h.com を利用）
 
-Usage:
-  transit suggest <query> [--limit N] [--json]
-  transit plan <from> <to> [--date YYYYMMDD] [--time HH:MM] [--type departure|arrival|first|last] [--json]
-  transit departures <station> [--date YYYYMMDD] [--time HH:MM] [--limit N] [--json]
+使い方:
+  transit suggest <駅名> [--limit N] [--json]
+  transit plan <出発> <到着> [--date YYYYMMDD] [--time HH:MM] [--type departure|arrival|first|last] [--json]
+  transit departures <駅名> [--date YYYYMMDD] [--time HH:MM] [--limit N] [--json]
   transit mcp
   transit version`)
 }
