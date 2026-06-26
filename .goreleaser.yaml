@@ -49,30 +49,10 @@ changelog:
       - "^test:"
       - "^chore:"
 
-# Publish a Homebrew cask to atani/homebrew-tap so users can run
-# `brew install atani/tap/transit`.
-homebrew_casks:
-  - name: transit
-    binaries:
-      - transit
-    repository:
-      owner: atani
-      name: homebrew-tap
-      branch: main
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Casks
-    homepage: "https://github.com/atani/transit"
-    description: "Japan transit routes and station departures CLI"
-    commit_author:
-      name: atani
-      email: a.taniwaki@gmail.com
-    # Remove the macOS quarantine attribute so the unsigned binary runs.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/transit"]
-          end
+# Homebrew is published as a source-build formula in atani/homebrew-tap
+# (Formula/transit.rb), matching the rest of the tap. GoReleaser no longer
+# generates a Homebrew cask, so a Formula and a Cask can never collide under
+# the same `transit` token. See docs/releasing.md.
 
 # Publish a winget manifest as a pull request to microsoft/winget-pkgs
 # from the atani/winget-pkgs fork, so users can run `winget install atani.transit`.
