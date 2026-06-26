@@ -1,47 +1,29 @@
-# Releasing
+# リリース
 
-Versioning is tracked by [release-please](https://github.com/googleapis/release-please).
-Binaries and the winget manifest are built by [GoReleaser](https://goreleaser.com).
-Homebrew is a source-build formula in [`atani/homebrew-tap`](https://github.com/atani/homebrew-tap).
+バージョン管理は [release-please](https://github.com/googleapis/release-please) が行います。
+配布物のビルドと公開は `.github/workflows/release-please.yml` の各ジョブが担います。
+構成は他の Go ツール（ctxpack など）と揃えています。
 
-## Homebrew (source formula)
+## 流れ
 
-`Formula/transit.rb` in the tap builds from the release source tarball with
-`go build` and injects the version, matching the rest of the tap. To cut a
-release and update the formula:
+1. [Conventional Commits](https://www.conventionalcommits.org)（`feat:` / `fix:` など）で `main` にマージします。
+2. release-please がリリース PR を作成・更新します（`.release-please-manifest.json` のバージョンと `CHANGELOG.md` を更新）。
+3. そのリリース PR をマージすると `vX.Y.Z` のタグと GitHub Release が作られます。
+4. 続けて以下のジョブが走ります。
+   - `build-release`: 6 プラットフォームの ZIP と winget マニフェスト束を作り、Release に添付。
+   - `publish-homebrew`: `atani/homebrew-tap` の `Formula/transit.rb` をソースビルド方式で更新。
+   - `publish-winget`: `microsoft/winget-pkgs` へ更新 PR を送信（`ENABLE_WINGET` 有効時のみ）。
 
-```bash
-# 1. tag and create the GitHub release (source tarball is auto-generated)
-gh release create vX.Y.Z --repo atani/transit --target main --title vX.Y.Z --notes "..."
+## 必要な secret / variable
 
-# 2. compute the tarball checksum
-curl -sL -o /tmp/transit.tar.gz \
-  "https://github.com/atani/transit/archive/refs/tags/vX.Y.Z.tar.gz"
-shasum -a 256 /tmp/transit.tar.gz
+- `HOMEBREW_TAP_GITHUB_TOKEN`: `atani/homebrew-tap` に push できる PAT。release-please の PR 作成と formula 更新に使います。
+- `WINGET_TOKEN`: `atani/winget-pkgs` フォークに push できる PAT。winget 送信に使います。
+- `ENABLE_WINGET`: リポジトリ変数。`true` で winget 自動送信を有効化します。
 
-# 3. update url + sha256 in atani/homebrew-tap Formula/transit.rb, then:
-brew upgrade atani/tap/transit
-```
+winget の初回登録だけは手動です。手順は `packaging/winget/README.md` を参照してください。
 
-This needs no secrets because Homebrew builds from source on the user's machine.
-
-## winget (GoReleaser)
-
-`release-please` opens a release pull request from Conventional Commits.
-Merging it creates the tag and release, then the `goreleaser` job builds the
-cross-platform binaries and opens a winget manifest pull request to
-[`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs).
-
-This path needs `TAP_GITHUB_TOKEN`: a personal access token with `repo` scope
-on the `atani/winget-pkgs` fork. GoReleaser runs with `release.mode:
-keep-existing`, so it only attaches artifacts to the release-please release.
-
-## Local validation
+## ローカル確認
 
 ```bash
-goreleaser check
-goreleaser release --snapshot --clean --skip=publish
+go build ./... && go vet ./... && go test ./...
 ```
-
-`version` is injected at build time, so `transit version` prints the released
-tag (it prints `dev` for local `go build` / `go run`).

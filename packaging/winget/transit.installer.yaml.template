@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: atani.transit
+PackageVersion: __VERSION__
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: transit.exe
+    PortableCommandAlias: transit
+Installers:
+  - Architecture: x64
+    InstallerUrl: __INSTALLER_URL_X64__
+    InstallerSha256: __INSTALLER_SHA256_X64__
+  - Architecture: arm64
+    InstallerUrl: __INSTALLER_URL_ARM64__
+    InstallerSha256: __INSTALLER_SHA256_ARM64__
+ManifestType: installer
+ManifestVersion: 1.10.0
