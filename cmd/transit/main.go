@@ -57,15 +57,11 @@ func run(ctx context.Context, args []string) error {
 		if fs.NArg() != 2 {
 			return fmt.Errorf("usage: transit plan <from> <to>")
 		}
-		fromID, _, err := client.ResolveStation(ctx, fs.Arg(0))
+		from, to, err := client.ResolveStationPair(ctx, fs.Arg(0), fs.Arg(1))
 		if err != nil {
 			return err
 		}
-		toID, _, err := client.ResolveStation(ctx, fs.Arg(1))
-		if err != nil {
-			return err
-		}
-		res, err := client.Plan(ctx, fromID, toID, transit.PlanOptions{Date: *date, Time: *timeValue, Type: *typeValue, NumItineraries: *n})
+		res, err := client.Plan(ctx, from.ID, to.ID, transit.PlanOptions{Date: *date, Time: *timeValue, Type: *typeValue, NumItineraries: *n})
 		if err != nil {
 			return err
 		}
@@ -73,6 +69,9 @@ func run(ctx context.Context, args []string) error {
 			return printJSON(res)
 		}
 		printPlan(res)
+		if planIsWalkOnly(res) {
+			fmt.Fprintln(os.Stderr, "※ 直通の経路が見つかりませんでした。出発・到着が別事業者（フィード）の場合に起きます。このAPIは事業者をまたぐ乗換を計算しません。同じ事業者の駅を指定すると経路が出ることがあります。")
+		}
 	case "departures":
 		fs := flag.NewFlagSet("departures", flag.ExitOnError)
 		date := fs.String("date", "", "service date YYYYMMDD")
@@ -126,6 +125,23 @@ func printPlan(res transit.PlanResponse) {
 			fmt.Printf("  %s-%s  %s  %s -> %s\n", transit.FormatServiceSeconds(leg.DepartureSecs), transit.FormatServiceSeconds(leg.ArrivalSecs), detail, leg.From.Name, leg.To.Name)
 		}
 	}
+}
+
+// planIsWalkOnly reports whether the plan has no real transit, i.e. every
+// itinerary is walking only (or none was found). This is the signal that the
+// from/to stations are not connected within a single feed.
+func planIsWalkOnly(res transit.PlanResponse) bool {
+	if len(res.Journeys) == 0 {
+		return true
+	}
+	for _, j := range res.Journeys {
+		for _, leg := range j.Legs {
+			if leg.Kind != "walk" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func printJSON(v any) error {

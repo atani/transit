@@ -159,6 +159,52 @@ func (c *Client) ResolveStation(ctx context.Context, input string) (string, stri
 	return res.Stations[0].ID, res.Stations[0].Name, nil
 }
 
+// candidates returns station suggestions for a query, or a single synthetic
+// station for passthrough inputs (geo: coordinates or feed-qualified IDs).
+func (c *Client) candidates(ctx context.Context, input string) ([]Station, error) {
+	if strings.Contains(input, ":") {
+		return []Station{{ID: input, Name: input}}, nil
+	}
+	res, err := c.Suggest(ctx, input, 10)
+	if err != nil {
+		return nil, err
+	}
+	if len(res.Stations) == 0 {
+		return nil, fmt.Errorf("station not found: %s", input)
+	}
+	return res.Stations, nil
+}
+
+// ResolveStationPair resolves from and to, preferring a pair of stations that
+// share a feed. The routing API plans within a single feed only, so picking the
+// top suggestion for each name independently can land on unconnectable feeds
+// (e.g. a 西鉄 station and a 新幹線 station) and degrade to a walk-only result.
+func (c *Client) ResolveStationPair(ctx context.Context, from, to string) (Station, Station, error) {
+	fromCands, err := c.candidates(ctx, from)
+	if err != nil {
+		return Station{}, Station{}, err
+	}
+	toCands, err := c.candidates(ctx, to)
+	if err != nil {
+		return Station{}, Station{}, err
+	}
+	f, t := pickFeedPair(fromCands, toCands)
+	return f, t, nil
+}
+
+// pickFeedPair returns the highest-ranked from/to pair that shares a feed, or
+// the top candidate of each when no feed is common to both.
+func pickFeedPair(from, to []Station) (Station, Station) {
+	for _, f := range from {
+		for _, t := range to {
+			if f.FeedID != "" && f.FeedID == t.FeedID {
+				return f, t
+			}
+		}
+	}
+	return from[0], to[0]
+}
+
 func (c *Client) get(ctx context.Context, path string, q url.Values, out any) error {
 	u := c.BaseURL + path
 	if len(q) > 0 {
