@@ -48,3 +48,5 @@ transit mcp
 ## API notes
 
 Transit API times are seconds from the service-date midnight in the result timezone. Values may exceed 86400 or be negative, so this tool formats them on the client side, including day offsets.
+
+Routing is per-feed: the API plans within a single operator's feed and does not compute transfers between operators. When you pass plain station names, `plan` resolves them to a pair of stations that share a feed so a route can be found. If the origin and destination only exist on different operators (for example a 西鉄 station and a 新幹線 station), no through route exists and the result is a single walking leg; the CLI prints a note in that case.
