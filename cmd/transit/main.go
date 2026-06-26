@@ -113,7 +113,7 @@ func run(ctx context.Context, args []string) error {
 }
 
 func printPlan(res transit.PlanResponse) {
-	fmt.Printf("%s -> %s (%s, %s)\n", res.From.Name, res.To.Name, res.Type, res.Timezone)
+	fmt.Printf("%s -> %s (%s, %s)\n", res.From.Name, res.To.Name, transit.TypeLabel(res.Type), res.Timezone)
 	for i, j := range res.Journeys {
 		fmt.Printf("\n#%d %s-%s  %d分  乗換%d回\n", i+1, transit.FormatServiceSeconds(j.DepartureSecs), transit.FormatServiceSeconds(j.ArrivalSecs), j.DurationSecs/60, j.TransferCount)
 		for _, leg := range j.Legs {
