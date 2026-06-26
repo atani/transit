@@ -154,7 +154,7 @@ func (c *Client) ResolveStation(ctx context.Context, input string) (string, stri
 		return "", "", err
 	}
 	if len(res.Stations) == 0 {
-		return "", "", fmt.Errorf("station not found: %s", input)
+		return "", "", fmt.Errorf("駅が見つかりません: %s", input)
 	}
 	return res.Stations[0].ID, res.Stations[0].Name, nil
 }
@@ -170,7 +170,7 @@ func (c *Client) candidates(ctx context.Context, input string) ([]Station, error
 		return nil, err
 	}
 	if len(res.Stations) == 0 {
-		return nil, fmt.Errorf("station not found: %s", input)
+		return nil, fmt.Errorf("駅が見つかりません: %s", input)
 	}
 	return res.Stations, nil
 }
