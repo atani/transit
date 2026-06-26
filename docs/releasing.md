@@ -1,29 +1,40 @@
 # Releasing
 
-Releases are driven by [release-please](https://github.com/googleapis/release-please)
-and built by [GoReleaser](https://goreleaser.com).
+Versioning is tracked by [release-please](https://github.com/googleapis/release-please).
+Binaries and the winget manifest are built by [GoReleaser](https://goreleaser.com).
+Homebrew is a source-build formula in [`atani/homebrew-tap`](https://github.com/atani/homebrew-tap).
 
-## Flow
+## Homebrew (source formula)
 
-1. Merge changes to `main` using [Conventional Commits](https://www.conventionalcommits.org)
-   (`feat:`, `fix:`, `feat!:`, ...).
-2. `release-please` opens (and keeps updating) a release pull request that bumps
-   the version in `.release-please-manifest.json` and updates `CHANGELOG.md`.
-3. Merging that release pull request creates the `vX.Y.Z` tag and GitHub release.
-4. The `goreleaser` job then attaches the build artifacts to that release:
-   cross-platform binaries (macOS / Linux / Windows on amd64 / arm64), the
-   Homebrew cask in [`atani/homebrew-tap`](https://github.com/atani/homebrew-tap),
-   and a winget manifest pull request to
-   [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs).
+`Formula/transit.rb` in the tap builds from the release source tarball with
+`go build` and injects the version, matching the rest of the tap. To cut a
+release and update the formula:
 
-GoReleaser runs with `release.mode: keep-existing`, so it never creates a second
-release; it only uploads to the one release-please made.
+```bash
+# 1. tag and create the GitHub release (source tarball is auto-generated)
+gh release create vX.Y.Z --repo atani/transit --target main --title vX.Y.Z --notes "..."
 
-## One-time setup
+# 2. compute the tarball checksum
+curl -sL -o /tmp/transit.tar.gz \
+  "https://github.com/atani/transit/archive/refs/tags/vX.Y.Z.tar.gz"
+shasum -a 256 /tmp/transit.tar.gz
 
-- Fork `microsoft/winget-pkgs` to `atani/winget-pkgs`.
-- Create a personal access token with `repo` scope on `atani/homebrew-tap` and
-  `atani/winget-pkgs`, and add it as the `TAP_GITHUB_TOKEN` repository secret.
+# 3. update url + sha256 in atani/homebrew-tap Formula/transit.rb, then:
+brew upgrade atani/tap/transit
+```
+
+This needs no secrets because Homebrew builds from source on the user's machine.
+
+## winget (GoReleaser)
+
+`release-please` opens a release pull request from Conventional Commits.
+Merging it creates the tag and release, then the `goreleaser` job builds the
+cross-platform binaries and opens a winget manifest pull request to
+[`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs).
+
+This path needs `TAP_GITHUB_TOKEN`: a personal access token with `repo` scope
+on the `atani/winget-pkgs` fork. GoReleaser runs with `release.mode:
+keep-existing`, so it only attaches artifacts to the release-please release.
 
 ## Local validation
 
