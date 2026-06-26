@@ -4,41 +4,179 @@ on:
   push:
     branches: [main]
 
+# Top-level permissions are read-only; each job requests only what it needs.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
+        with:
+          # Open the release PR with an existing PAT instead of GITHUB_TOKEN.
+          # PRs opened with GITHUB_TOKEN do not trigger other workflows, so the
+          # CI checks never run and the release PR stays blocked on its required
+          # checks (which enforce_admins makes unbypassable). HOMEBREW_TAP_GITHUB_TOKEN
+          # is the existing PAT, so reuse it here.
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          config-file: .github/release-please-config.json
+          manifest-file: .release-please-manifest.json
 
-  goreleaser:
-    name: GoReleaser
+  build-release:
+    name: Build and attach distributions
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Build release binaries
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Fail fast on anything that is not a plain semver-ish version, both
+          # to catch upstream surprises and to keep the sed templating below safe.
+          if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "unexpected version format: ${VERSION}" >&2
+            exit 1
+          fi
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            name="transit_${VERSION}_${os}_${arch}"
+            ext=""
+            if [ "$os" = "windows" ]; then ext=".exe"; fi
+            GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${name}/transit${ext}" ./cmd/transit
+            cp README.md LICENSE "dist/${name}/"
+            (cd "dist/${name}" && python3 -m zipfile -c "../${name}.zip" .)
+            rm -rf "dist/${name}"
+          done
+      - name: Generate winget manifests
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "dist/winget/atani/transit/${VERSION}"
+          URL_X64="https://github.com/atani/transit/releases/download/${TAG}/transit_${VERSION}_windows_amd64.zip"
+          SHA_X64=$(sha256sum "dist/transit_${VERSION}_windows_amd64.zip" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+          URL_ARM64="https://github.com/atani/transit/releases/download/${TAG}/transit_${VERSION}_windows_arm64.zip"
+          SHA_ARM64=$(sha256sum "dist/transit_${VERSION}_windows_arm64.zip" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
+          sed \
+            -e "s/__VERSION__/${VERSION}/g" \
+            -e "s#__INSTALLER_URL_X64__#${URL_X64}#g" \
+            -e "s/__INSTALLER_SHA256_X64__/${SHA_X64}/g" \
+            -e "s#__INSTALLER_URL_ARM64__#${URL_ARM64}#g" \
+            -e "s/__INSTALLER_SHA256_ARM64__/${SHA_ARM64}/g" \
+            packaging/winget/transit.installer.yaml.template > "dist/winget/atani/transit/${VERSION}/atani.transit.installer.yaml"
+          sed -e "s/__VERSION__/${VERSION}/g" packaging/winget/transit.locale.en-US.yaml.template > "dist/winget/atani/transit/${VERSION}/atani.transit.locale.en-US.yaml"
+          sed -e "s/__VERSION__/${VERSION}/g" packaging/winget/transit.yaml.template > "dist/winget/atani/transit/${VERSION}/atani.transit.yaml"
+          (cd dist/winget && python3 -m zipfile -c "../transit_${VERSION}_winget_manifests.zip" .)
+          # Checksums cover every release zip, including the winget manifests
+          # archive generated just above.
+          (cd dist && sha256sum ./*.zip > checksums.txt)
+      - name: Attach distributions to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG" dist/*.zip dist/checksums.txt
+
+  publish-winget:
+    name: Submit to winget
+    needs: [release-please, build-release]
+    # Stays dormant until the repository variable ENABLE_WINGET is set to
+    # "true" (after a winget-pkgs fork and the WINGET_TOKEN secret are in
+    # place). The first-ever submission of a brand-new package still goes
+    # through the manual flow in packaging/winget/README.md; this job keeps
+    # subsequent versions up to date automatically.
+    if: ${{ needs.release-please.outputs.release_created && vars.ENABLE_WINGET == 'true' }}
+    runs-on: ubuntu-latest
+    # The submission acts on the winget-pkgs fork via WINGET_TOKEN, so no
+    # write access to this repository's GITHUB_TOKEN is needed.
+    permissions:
+      contents: read
+    steps:
+      - name: Submit Windows zips to winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: atani.transit
+          version: ${{ needs.release-please.outputs.version }}
+          release-tag: ${{ needs.release-please.outputs.tag_name }}
+          installers-regex: '_windows_(amd64|arm64)\.zip$'
+          fork-user: atani
+          token: ${{ secrets.WINGET_TOKEN }}
+
+  publish-homebrew:
+    name: Update Homebrew formula
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-          fetch-depth: 0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version: "1.24"
-      - uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
+      - name: Check for tap token
+        id: check
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # PAT with repo scope on atani/homebrew-tap and atani/winget-pkgs (a
-          # fork of microsoft/winget-pkgs). Used to push the Homebrew cask and
-          # open the winget manifest pull request.
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "HOMEBREW_TAP_GITHUB_TOKEN is not set; skipping formula update." >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: steps.check.outputs.skip != 'true'
+        with:
+          repository: atani/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+      - name: Generate formula
+        if: steps.check.outputs.skip != 'true'
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          TARBALL="https://github.com/atani/transit/archive/refs/tags/${TAG}.tar.gz"
+          SHA=$(curl -fsSL "$TARBALL" | sha256sum | cut -d' ' -f1)
+          cat > homebrew-tap/Formula/transit.rb << FORMULA
+          class Transit < Formula
+            desc "Japan transit routes and station departures CLI"
+            homepage "https://github.com/atani/transit"
+            url "${TARBALL}"
+            sha256 "${SHA}"
+            license "MIT"
+            head "https://github.com/atani/transit.git", branch: "main"
+
+            depends_on "go" => :build
+
+            def install
+              system "go", "build", *std_go_args(ldflags: "-s -w -X main.version=#{version}"), "./cmd/transit"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/transit --version")
+            end
+          end
+          FORMULA
+      - name: Commit and push formula
+        if: steps.check.outputs.skip != 'true'
+        working-directory: homebrew-tap
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/transit.rb
+          git diff --staged --quiet || git commit -m "Update transit to ${TAG}"
+          git push
