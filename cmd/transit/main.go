@@ -44,7 +44,7 @@ func run(ctx context.Context, args []string) error {
 			return printJSON(res)
 		}
 		for _, st := range res.Stations {
-			fmt.Printf("%s	%s	%s\n", st.Name, st.NameKana, st.FeedName)
+			fmt.Printf("%s	%s	%s\n", st.Name, st.NameKana, transit.FeedLabel(st.FeedName))
 		}
 	case "plan":
 		fs := flag.NewFlagSet("plan", flag.ExitOnError)
