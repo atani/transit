@@ -70,7 +70,7 @@ func run(ctx context.Context, args []string) error {
 		}
 		printPlan(res)
 		if planIsWalkOnly(res) {
-			fmt.Fprintln(os.Stderr, "※ 直通の経路が見つかりませんでした。出発・到着が別事業者（フィード）の場合に起きます。このAPIは事業者をまたぐ乗換を計算しません。同じ事業者の駅を指定すると経路が出ることがあります。")
+			fmt.Fprintln(os.Stderr, "※ 公共交通機関の経路が見つからず、徒歩のみの結果です。指定した地点の周辺に運行データが無い場合に起きます。")
 		}
 	case "departures":
 		fs := flag.NewFlagSet("departures", flag.ExitOnError)
