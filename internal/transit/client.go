@@ -175,10 +175,9 @@ func (c *Client) candidates(ctx context.Context, input string) ([]Station, error
 	return res.Stations, nil
 }
 
-// ResolveStationPair resolves from and to, preferring a pair of stations that
-// share a feed. The routing API plans within a single feed only, so picking the
-// top suggestion for each name independently can land on unconnectable feeds
-// (e.g. a 西鉄 station and a 新幹線 station) and degrade to a walk-only result.
+// ResolveStationPair resolves from and to into the pair of stops most likely to
+// yield a sensible itinerary. A plain name such as 押上 or 渋谷 matches both rail
+// stations and bus stops across many feeds, and the choice drives the result.
 func (c *Client) ResolveStationPair(ctx context.Context, from, to string) (Station, Station, error) {
 	fromCands, err := c.candidates(ctx, from)
 	if err != nil {
@@ -192,15 +191,53 @@ func (c *Client) ResolveStationPair(ctx context.Context, from, to string) (Stati
 	return f, t, nil
 }
 
-// pickFeedPair returns the highest-ranked from/to pair that shares a feed, or
-// the top candidate of each when no feed is common to both.
-func pickFeedPair(from, to []Station) (Station, Station) {
+// stationKind marks a suggestion as a rail station rather than a bus stop.
+const stationKind = "station"
+
+// railStations returns only the rail-station candidates, preserving rank.
+func railStations(cands []Station) []Station {
+	out := make([]Station, 0, len(cands))
+	for _, s := range cands {
+		if s.Kind == stationKind {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// sharedFeed returns the highest-ranked from/to pair that shares a feed.
+func sharedFeed(from, to []Station) (Station, Station, bool) {
 	for _, f := range from {
 		for _, t := range to {
 			if f.FeedID != "" && f.FeedID == t.FeedID {
-				return f, t
+				return f, t, true
 			}
 		}
+	}
+	return Station{}, Station{}, false
+}
+
+// pickFeedPair chooses the from/to pair to plan with, in descending preference:
+//
+//  1. two rail stations sharing a feed — a direct ride with no transfer between
+//     operators, e.g. 渋谷→新宿 on the 埼京線;
+//  2. two rail stations on different feeds — the API routes across feeds, so
+//     this is fine, e.g. 和白 (西鉄) → 博多 (JR);
+//  3. anything sharing a feed, then the top candidates, for places that only
+//     exist as bus stops.
+//
+// Preferring rail stations matters because a name like 押上 also matches bus
+// stops: resolving to those yields an all-bus itinerary that can span a day.
+func pickFeedPair(from, to []Station) (Station, Station) {
+	fromRail, toRail := railStations(from), railStations(to)
+	if f, t, ok := sharedFeed(fromRail, toRail); ok {
+		return f, t
+	}
+	if len(fromRail) > 0 && len(toRail) > 0 {
+		return fromRail[0], toRail[0]
+	}
+	if f, t, ok := sharedFeed(from, to); ok {
+		return f, t
 	}
 	return from[0], to[0]
 }
