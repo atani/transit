@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/atani/transit/compare/v0.3.1...v0.3.2) (2026-07-26)
+
+
+### Bug Fixes
+
+* 上流 API の変更に追従して駅の解決と表示を改善 ([#16](https://github.com/atani/transit/issues/16)) ([1ecc10a](https://github.com/atani/transit/commit/1ecc10ad1a724adc7ed17b08e16c80dcdc0baa71))
+
 ## [0.3.1](https://github.com/atani/transit/compare/v0.3.0...v0.3.1) (2026-06-26)
 
 
